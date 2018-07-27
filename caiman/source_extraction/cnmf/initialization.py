@@ -416,7 +416,7 @@ def initialize_components(Y, K=30, gSig=[5, 5], gSiz=None, ssub=1, tsub=1, nIter
 
         Ain = np.reshape(Ain, (np.prod(d), K), order='F')
 
-    if nb>0:
+    if nb > 0 or nb == -1:
         b_in = np.reshape(b_in, ds + (-1,), order='F')
 
         if len(ds) == 2:
@@ -928,11 +928,15 @@ def hals(Y, A, C, b, f, bSiz=3, maxIter=5):
     dims, T = np.shape(Y)[:-1], np.shape(Y)[-1]
     K = A.shape[1]  # number of neurons
     nb = b.shape[1]  # number of background components
-    if isinstance(bSiz, (int, float)):
-        bSiz = [bSiz] * len(dims)
-    ind_A = nd.filters.uniform_filter(np.reshape(
-        A, dims + (K,), order='F'), size=bSiz + [0])
-    ind_A = np.reshape(ind_A > 1e-10, (np.prod(dims), K), order='F')
+    if bSiz is not None:
+        if isinstance(bSiz, (int, float)):
+	   	     bSiz = [bSiz] * len(dims)
+        ind_A = nd.filters.uniform_filter(np.reshape(A, dims + (K,),
+					order='F'), size=bSiz + [0])
+        ind_A = np.reshape(ind_A > 1e-10, (np.prod(dims), K), order='F')
+    else:
+        ind_A = A>1e-10
+
     ind_A = spr.csc_matrix(ind_A)  # indicator of nonnero pixels
 
     def HALS4activity(Yr, A, C, iters=2):
@@ -1723,15 +1727,10 @@ def compute_W(Y, A, C, dims, radius, data_fits_in_memory=True, ssub=1, tsub=1):
         indices += list(index)
         B = Y[index] - A[index].dot(C) - \
             b0[index, None] if X is None else X[index]
-        tmp = np.array(B.dot(B.T))
-        try:
-            data = np.concatenate([data,(np.linalg.inv(tmp).
-                         dot(B.dot(Y[p] - A[p].dot(C).ravel() - b0[p] if X is None else X[p])))])
-        except:
-            # np.linalg.lstsq seems less robust but scipy version is
-            # (robust but for the problem size slower) alternative
-            data = np.concatenate([data,(scipy.linalg.lstsq(B.T, Y[p] - A[p].dot(C) - b0[p] if X is None else X[p], check_finite=False)[0])])
-            #print('B :',B.sum(),' Y: ',Y.sum(),' data: ',np.sum(data),' X: ',X.sum(),' X[p]: ',X[p])
+        tmp = np.array(B.dot(B.T)) + np.finfo(np.float32).eps * \
+              np.eye(len(B), dtype='float32')
+        data += list(np.linalg.inv(tmp).
+                dot(B.dot(Y[p] - A[p].dot(C).ravel() - b0[p] if X is None else X[p])))
         indptr.append(len(indices))
     return spr.csr_matrix((data, indices, indptr), dtype='float32'), b0.astype(np.float32)
 
