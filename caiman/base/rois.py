@@ -157,7 +157,7 @@ def get_distance_from_A(masks_gt, masks_comp, min_dist=10):
     return distance_masks([A_ben, A_cnmf], [cm_ben, cm_cnmf], min_dist)
 
 def nf_match_neurons_in_binary_masks(masks_gt, masks_comp, thresh_cost=.7, min_dist=10, print_assignment=False,
-                                     plot_results=False, Cn=None, labels=['Session 1','Session 2'], cmap='viridis', D=None, enclosed_thr=None):
+                                     plot_results=False, Cn=None, labels=['Session 1','Session 2'], cmap='gray', D=None, enclosed_thr=None):
     """
     Match neurons expressed as binary masks. Uses Hungarian matching algorithm
 
@@ -629,7 +629,7 @@ def extract_active_components(assignments, indeces, only = True):
 
         only: bool
             If True return components that were active ONLY in these sessions and
-            where inactive in all the others. If False components can be active
+            were inactive in all the others. If False components can be active
             in other sessions as well
 
     Returns:

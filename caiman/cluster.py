@@ -85,12 +85,12 @@ def extract_patch_coordinates(dims, rf, stride, border_pix=0, indeces=[slice(Non
     for count_0, xx in enumerate(iters[0]):
         coords_x = np.arange(xx - rf[0], xx + rf[0] + 1)
         coords_x = coords_x[(coords_x >= 0) & (coords_x < dims[0])]
-        coords_x += border_pix + np.maximum(sl_start[0], border_pix)
+        coords_x += border_pix*0 + np.maximum(sl_start[0], border_pix)
 
         for count_1, yy in enumerate(iters[1]):
             coords_y = np.arange(yy - rf[1], yy + rf[1] + 1)
             coords_y = coords_y[(coords_y >= 0) & (coords_y < dims[1])]
-            coords_y += border_pix + np.maximum(sl_start[1], border_pix)
+            coords_y += border_pix*0 + np.maximum(sl_start[1], border_pix)
 
             if len(dims) == 2:
                 idxs = np.meshgrid(coords_x, coords_y)
@@ -240,15 +240,17 @@ def start_server(slurm_script=None, ipcluster="ipcluster", ncpus=None):
         ncpus = psutil.cpu_count()
 
     if slurm_script is None:
+
         if ipcluster == "ipcluster":
             subprocess.Popen(
                 "ipcluster start -n {0}".format(ncpus), shell=True, close_fds=(os.name != 'nt'))
         else:
             subprocess.Popen(shlex.split(
                 "{0} start -n {1}".format(ipcluster, ncpus)), shell=True, close_fds=(os.name != 'nt'))
-
+        time.sleep(1.5)
         # Check that all processes have started
         client = ipyparallel.Client()
+        time.sleep(1.5)
         while len(client) < ncpus:
             sys.stdout.write(".")  # Give some visual feedback of things starting
             sys.stdout.flush()     # (de-buffered)
@@ -279,7 +281,7 @@ def shell_source(script):
         line = pipe.stdout.readline().decode('utf-8').rstrip()
         if 'FINISHED_CLUSTER' in line: # find the keyword set above to determine the end of the output stream
             break
-        debug.info("shell_source parsing line[" + str(line) + "]")
+        logger.debug("shell_source parsing line[" + str(line) + "]")
         lsp = str(line).split("=", 1)
         if len(lsp) > 1:
             env[lsp[0]] = lsp[1]
@@ -389,7 +391,7 @@ def setup_cluster(backend='multiprocessing', n_processes=None, single_thread=Fal
                 stop_server()
             except:
                 logger.debug('Nothing to stop')
-            slurm_script = 'SLURM/slurmStart.sh'
+            slurm_script = '/mnt/home/agiovann/SOFTWARE/CaImAn/SLURM/slurmStart.sh'
             logger.info([str(n_processes), slurm_script])
             start_server(slurm_script=slurm_script, ncpus=n_processes)
             pdir, profile = os.environ['IPPPDIR'], os.environ['IPPPROFILE']

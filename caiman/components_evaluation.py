@@ -150,12 +150,9 @@ def compute_event_exceptionality(traces, robust_std=False, N=5, use_mode_fast=Fa
     # compute with this numerically stable function
     erf = scipy.special.log_ndtr(-z)
 
-    filt = np.ones(N)
-
     # moving sum
-    erfc = np.apply_along_axis(lambda m: np.convolve(
-        m, filt, mode='full'), axis=1, arr=erf)
-    erfc = erfc[:, :T]
+    erfc = np.cumsum(erf, 1)
+    erfc[:, N:] -= erfc[:, :-N]
 
     # select the maximum value of such probability for each trace
     fitness = np.min(erfc, 1)
@@ -267,6 +264,7 @@ def evaluate_components_CNN(A, dims, gSig, model_name=os.path.join(caiman_datadi
         else:
             raise FileNotFoundError("File for requested model {} not found".format(model_name))
         with open(model_file, 'r') as json_file:
+            print('USING MODEL:' + model_file)
             loaded_model_json = json_file.read()
 
         loaded_model = model_from_json(loaded_model_json)
@@ -588,6 +586,7 @@ def select_components_from_metrics(A, dims, gSig, r_values, comp_SNR,
     idx_components = np.setdiff1d(idx_components, bad_comps)
     idx_components_bad = np.setdiff1d(
         list(range(len(r_values))), idx_components)
+
 
     return idx_components.astype(np.int), idx_components_bad.astype(np.int), cnn_values
 

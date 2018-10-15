@@ -20,18 +20,20 @@ class CNMFParams(object):
                  min_pnr=20, gnb=1, normalize_init=True, options_local_NMF=None,
                  ring_size_factor=1.5, rolling_length=100, rolling_sum=True,
                  ssub=2, ssub_B=2, tsub=2,
-                 block_size=5000, num_blocks_per_run=20, update_background_components=True,
+                 block_size_spat=5000, num_blocks_per_run_spat=20,
+                 block_size_temp=5000, num_blocks_per_run_temp=20,
+                 update_background_components=True,
                  method_deconvolution='oasis', p=2, s_min=None,
                  do_merge=True, merge_thresh=0.8,
                  decay_time=0.4, fr=30, min_SNR=2.5, rval_thr=0.8,
                  N_samples_exceptionality=None, batch_update_suff_stat=False,
-                 expected_comps=500, max_comp_update_shape=np.inf, max_num_added=5,
-                 min_num_trial=5, minibatch_shape=100, minibatch_suff_stat=5,
+                 expected_comps=500, iters_shape=5, max_comp_update_shape=np.inf,
+                 max_num_added=5, min_num_trial=5, minibatch_shape=100, minibatch_suff_stat=5,
                  n_refit=0, num_times_comp_updated=np.inf, simultaneously=False,
                  sniper_mode=False, test_both=False, thresh_CNN_noisy=0.5,
                  thresh_fitness_delta=-50, thresh_fitness_raw=None, thresh_overlap=0.5,
-                 update_num_comps=True, use_dense=True, use_peak_max=True,
-                 only_init_patch=False, params_dict={},
+                 update_freq=200, update_num_comps=True, use_dense=True, use_peak_max=True,
+                 only_init_patch=True, params_dict={},
                  ):
         """Class for setting the processing parameters. All parameters for CNMF, online-CNMF, quality testing,
         and motion correction can be set here and then used in the various processing pipeline steps.
@@ -83,7 +85,7 @@ class CNMFParams(object):
                 Delete duplicate components in the overlaping regions between neighboring patches. If False,
                 then merging is used.
 
-            only_init: bool, default: False
+            only_init: bool, default: True
                 whether to run only the initialization
 
             skip_refinement: bool, default: False
@@ -92,10 +94,10 @@ class CNMFParams(object):
             remove_very_bad_comps: bool, default: True
                 Whether to remove (very) bad quality components during patch processing
 
-            ssub: float, default: 2
+            p_ssub: float, default: 2
                 Spatial downsampling factor
 
-            tsub: float, default: 2
+            p_tsub: float, default: 2
                 Temporal downsampling factor
 
             memory_fact: float, default: 1
@@ -233,7 +235,7 @@ class CNMFParams(object):
             n_pixels_per_process: int, default: 1000
                 number of pixels to be processed by each worker
 
-            thr_method: 'nrg'|'max', default: 'max'
+            thr_method: 'nrg'|'max', default: 'nrg'
                 thresholding method
 
             maxthr: float, default: 0.1
@@ -362,6 +364,9 @@ class CNMFParams(object):
             ds_factor: int, default: 1,
                 spatial downsampling factor for faster processing (if > 1)
 
+            dist_shape_update: bool, default: False,
+                update shapes in a distributed fashion
+
             epochs: int, default: 1,
                 number of times to go over data
 
@@ -373,6 +378,9 @@ class CNMFParams(object):
 
             init_method: 'bare'|'cnmf'|'seeded', default: 'bare',
                 initialization method
+
+            iters_shape: int, default: 5
+                Number of block-coordinate decent iterations for each shape update
 
             max_comp_update_shape: int, default: np.inf
                 Maximum number of spatial components to be updated at each time
@@ -442,6 +450,9 @@ class CNMFParams(object):
 
             thresh_overlap: float, default: 0.5
                 Intersection-over-Union space overlap threshold for screening new components
+
+            update_freq: int, default: 200
+                Update each shape at least once every X frames when in distributed mode
 
             update_num_comps: bool, default: True
                 Whether to search for new components
@@ -527,9 +538,9 @@ class CNMFParams(object):
             'remove_very_bad_comps': remove_very_bad_comps,
             'rf': rf,
             'skip_refinement': False,
-            'ssub': p_ssub,             # spatial downsampling factor
+            'p_ssub': p_ssub,             # spatial downsampling factor
             'stride': stride,
-            'tsub': p_tsub,             # temporal downsampling factor
+            'p_tsub': p_tsub,             # temporal downsampling factor
         }
 
         self.preprocess = {
@@ -578,7 +589,7 @@ class CNMFParams(object):
         }
 
         self.spatial = {
-            'block_size': block_size,
+            'block_size_spat': block_size_spat, # number of pixels to parallelize residual computation ** DECREASE IF MEMORY ISSUES
             'dist': 3,                       # expansion factor of ellipse
             'expandCore': iterate_structure(generate_binary_structure(2, 1), 2).astype(int),
             # Flag to extract connected components (might want to turn to False for dendritic imaging)
@@ -595,10 +606,10 @@ class CNMFParams(object):
             'nb': gnb,                        # number of background components
             'normalize_yyt_one': True,
             'nrgthr': 0.9999,                # Energy threshold
-            'num_blocks_per_run': num_blocks_per_run,
+            'num_blocks_per_run_spat': num_blocks_per_run_spat, # number of process to parallelize residual computation ** DECREASE IF MEMORY ISSUES
             'se': None,                      # Morphological closing structuring element
             'ss': None,                      # Binary element for determining connectivity
-            'thr_method': 'max',             # Method of thresholding ('max' or 'nrg')
+            'thr_method': 'nrg',             # Method of thresholding ('max' or 'nrg')
             # whether to update the background components in the spatial phase
             'update_background_components': update_background_components,
         }
@@ -609,7 +620,7 @@ class CNMFParams(object):
             'bas_nonneg': False,
             # number of pixels to process at the same time for dot product. Make it
             # smaller if memory problems
-            'block_size': block_size,
+            'block_size_temp': block_size_temp, # number of pixels to parallelize residual computation ** DECREASE IF MEMORY ISSUES
             # bias correction factor (between 0 and 1, close to 1)
             'fudge_factor': .96,
             # number of autocovariance lags to be considered for time constant estimation
@@ -622,7 +633,7 @@ class CNMFParams(object):
             'nb': gnb,                   # number of background components
             'noise_method': 'mean',     # averaging method ('mean','median','logmexp')
             'noise_range': [.25, .5],   # range of normalized frequencies over which to average
-            'num_blocks_per_run': num_blocks_per_run,
+            'num_blocks_per_run_temp': num_blocks_per_run_temp, # number of process to parallelize residual computation ** DECREASE IF MEMORY ISSUES
             'p': p,                     # order of AR indicator dynamics
             's_min': s_min,             # minimum spike threshold
             'solvers': ['ECOS', 'SCS'],
@@ -648,11 +659,13 @@ class CNMFParams(object):
         self.online = {
             'N_samples_exceptionality': N_samples_exceptionality,  # timesteps to compute SNR
             'batch_update_suff_stat': batch_update_suff_stat,
+            'dist_shape_update': False,        # update shapes in a distributed way
             'ds_factor': 1,                    # spatial downsampling for faster processing
             'epochs': 1,                       # number of epochs
             'expected_comps': expected_comps,  # number of expected components
             'init_batch': 200,                 # length of mini batch for initialization
             'init_method': 'bare',             # initialization method for first batch,
+            'iters_shape': iters_shape,        # number of block-CD iterations
             'max_comp_update_shape': max_comp_update_shape,
             'max_num_added': max_num_added,    # maximum number of new components for each frame
             'max_shifts_online': 10,           # maximum shifts during motion correction
@@ -678,6 +691,7 @@ class CNMFParams(object):
             'thresh_fitness_delta': thresh_fitness_delta,
             'thresh_fitness_raw': thresh_fitness_raw,    # threshold for trace SNR (computed below)
             'thresh_overlap': thresh_overlap,
+            'update_freq': update_freq,            # update every shape at least once every update_freq steps
             'update_num_comps': update_num_comps,  # flag for searching for new components
             'use_dense': use_dense,            # flag for representation and storing of A and b
             'use_peak_max': use_peak_max,      # flag for finding candidate centroids
@@ -739,7 +753,7 @@ class CNMFParams(object):
                             "normalize_init in group init automatically to False.")
             self.set('init', {'normalize_init': False})
 
-    def set(self, group, val_dict, set_if_not_exists=False):
+    def set(self, group, val_dict, set_if_not_exists=False, verbose=False):
         """ Add key-value pairs to a group. Existing key-value pairs will be overwritten
             if specified in val_dict, but not deleted.
 
@@ -755,8 +769,9 @@ class CNMFParams(object):
         d = getattr(self, group)
         for k, v in val_dict.items():
             if k not in d and not set_if_not_exists:
-                logging.warning(
-                    "NOT setting value of key {} in group {}, because no prior key existed...".format(k, group))
+                if verbose:
+                    logging.warning(
+                        "NOT setting value of key {} in group {}, because no prior key existed...".format(k, group))
             else:
                 if np.any(d[k] != v):
                     logging.warning(
@@ -821,7 +836,7 @@ class CNMFParams(object):
                 'merging': self.merging, 'motion': self.motion
                 }
 
-    def change_params(self, params_dict):
+    def change_params(self, params_dict, verbose=False):
         for gr in list(self.__dict__.keys()):
-            self.set(gr, params_dict)
+            self.set(gr, params_dict, verbose=verbose)
         return self
