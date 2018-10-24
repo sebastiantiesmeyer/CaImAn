@@ -187,4 +187,6 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
+RadboudMemDyn/*
+
 # End of https://www.gitignore.io/api/macos,python,windows
