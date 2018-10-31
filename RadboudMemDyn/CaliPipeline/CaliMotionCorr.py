@@ -38,14 +38,14 @@ def motion_correct(file, destination, non_rigid = True):
     do_motion_correction_rigid = not(non_rigid)  # in this case it will also save a rigid motion corrected movie
     gSig_filt = (4, 4)       # size of filter, in general gSig (see below),
     #                          change this one if algorithm does not work
-    max_shifts = (5, 5)      # maximum allowed rigid shift
-    splits_rig = 10          # for parallelization split the movies in  num_splits chuncks across time
+    max_shifts = (6, 6)      # maximum allowed rigid shift
+    splits_rig = 50          # for parallelization split the movies in  num_splits chuncks across time
     strides = (48, 48)       # start a new patch for pw-rigid motion correction every x pixels
     overlaps = (24, 24)      # overlap between pathes (size of patch strides+overlaps)
-    splits_els = 10          # for parallelization split the movies in  num_splits chuncks across time
+    splits_els = 20          # for parallelization split the movies in  num_splits chuncks across time
     #                          (remember that it should hold that length_movie/num_splits_to_process_rig>100)
     upsample_factor_grid = 4 # upsample factor to avoid smearing when merging patches
-    max_deviation_rigid = 3  # maximum deviation allowed for patch with respect to rigid shifts
+    max_deviation_rigid = 6  # maximum deviation allowed for patch with respect to rigid shifts
         
     if do_motion_correction_nonrigid or do_motion_correction_rigid:
         # do motion correction rigid
@@ -84,11 +84,17 @@ def motion_correct(file, destination, non_rigid = True):
                            np.max(np.abs(mc.y_shifts_els)))).astype(np.int)
     
         # create memory mappable file in the right order on the hard drive (C order)        
-            fname_new = cm.save_memmap([mc.fname_tot_els], base_name=extract_spikes,
+            fname_new = cm.save_memmap([mc.fname_tot_els], base_name=destination,
                                        order = 'C', border_to_0=bord_px, dview=dview)
         else:
-            fname_new = cm.save_memmap([mc.fname_tot_rig], base_name=extract_spikes,
+            fname_new = cm.save_memmap([mc.fname_tot_rig], base_name=destination,
                                        order = 'C', border_to_0=bord_px, dview=dview)
+            
+        
+    try:
+        cm.stop_server(dview=dview) # stop it if it was running
+    except:
+        print('No server running to stop... ')
 
     return fname_new
 
@@ -106,44 +112,64 @@ def get_job_type(job):
 
 
 
-if __name__ == "__main__":
+
+if __name__ == "__main__":  
     
     parser = argparse.ArgumentParser(description='Ca2+ motion corrections script.')
     parser.add_argument('input', metavar='N', type=str, nargs='+',
                        help='Pipeline input: file name or folder root name')
     parser.add_argument('--output', '-o', type=str, nargs=1,
-                       help='Onput location; default: . ', default = '.')
+                       help='Output location for single file correction; default: . ', default = '.')
+    parser.add_argument('--grep', '-g', type=str, nargs = '+',
+                       help='process only files with the given string in the name; default: "" ', default = "")
+    parser.add_argument('-M', action="store_true",
+                    help='use multiple processes')
+    parser.add_argument('--overwrite',action="store_true", help='overwrite existing files')
+    parser.add_argument('--single_trials',action="store_true", help='produce single trial memmaps')
+    parser.add_argument('--non_rigid',action="store_true", help='include a non-rigid transformation step')
     
+
     jobs = parser.parse_args().input
     
 
     job_type = get_job_type(jobs[0])
+    multiprocessing = parser.parse_args().M
+    overwrite = parser.parse_args().overwrite
+    grep = parser.parse_args().grep
+    
+    print(len(jobs))
     
     if len(jobs)>1:
         output_loc=jobs[1]
     else:
         output_loc = parser.parse_args().output[0]
     
+    
     if job_type=='folder':
         root = jobs[0]
+
+        os.makedirs(os.path.join(root,'motion_corr'),exist_ok=True)
+                
+        files = sorted([f for f in os.listdir(os.path.join(root,'preprocessed')) if '.tif' in f and all([(g in f) for g in grep])])
+        fails = []
         
-        mice = [f for f in os.listdir(os.path.join(root,'cropped')) if os.path.isdir(os.path.join(root,'cropped',f))]
-        for mouse in mice:
-            days = [f for f in os.listdir(os.path.join(root,'cropped',mouse)) if os.path.isdir(os.path.join(root,'cropped',mouse,f))]
-            for day in days:
-                files = [f for f in os.listdir(os.path.join(root,'cropped',mouse,day)) if f[-4:]=='.tif']
-                for file in files:
-                    dest_name = '_'.join([mouse,day,'motion_corr'])
-                    os.system('mkdir -p '+os.path.join(root,'motion_corr',mouse,day))
-                    if not([f for f in os.listdir(os.path.join(root,'motion_corr',mouse,day)) if dest_name in f]):
-                        dest = (os.path.join(root,'motion_corr',mouse,day,dest_name))
-                        file = (os.path.join(root,'cropped',mouse,day,file))
-                        motion_correct(file,dest)
-    
+        if parser.parse_args().single_trials:
+            jobs = [[f] for f in files]
+        else:
+            days = sorted(set([num.split('_')[1] for num in files]))
+            jobs = [sorted([f for f in files if f.split('_')[1]==day]) for day in days ]
+                
+        for job in jobs:
+            if parser.parse_args().single_trials:
+                destination = os.path.join(root,'motion_corr','_'.join(job[0].split('_')[:3]))
+            else:
+                destination = os.path.join(root,'motion_corr','_'.join(job[0].split('_')[:2]))
+            print(job)
+            if not (any([(job[0] in f) for f in os.listdir(os.path.join(root,'preprocessed'))])) or parser.parse_args().overwrite:    
+                motion_correct([os.path.join(root,'preprocessed',j) for j in job],destination=destination,non_rigid = parser.parse_args().non_rigid)
     else:
-        motion_correct([jobs[0]],output_loc)
-        
-    
-        
+        motion_correct(input,parser.parse_args().output,non_rigid = parser.parse_args().non_rigid)
+            
+ 
         
         

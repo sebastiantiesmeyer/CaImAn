@@ -37,7 +37,7 @@ def find_file(name_elements,folder,results):
 
 if __name__ == "__main__":
     
-    parser = argparse.ArgumentParser(description='The Radboud Neoruinformatics Calcium Imaging Pipeline.')
+    parser = argparse.ArgumentParser(description='The Radboud Neuruinformatics Calcium Imaging Pipeline.')
     parser.add_argument('name', metavar='N', type=str, nargs='+',
                        help='Pipeline input: file name, folder name or excel sheet')
     parser.add_argument('--input', '-i', type=str,

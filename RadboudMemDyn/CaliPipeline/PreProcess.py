@@ -25,6 +25,8 @@ decoder = os.path.expanduser(c['PATHS']['decoder'])
 
 py_inscopix = os.path.join(ana_2,'envs',c['ENV_NAMES']['inscopix'],'bin/python')
 
+
+
 def get_job_type(job):
     extension = [e for e in job.split('.')]
     if  os.path.isdir(job):
@@ -44,8 +46,10 @@ def find_file(name_elements,folder,results):
         
     return(results)
     
-def decode_file(inp,outp):
-    cmd = ' '.join([py_inscopix,decoder,'"'+inp+'"',outp])   
+def decode_file(inp,outp,crop_pts=[]):
+    cmd = ' '.join([py_inscopix,decoder,'"'+inp+'"',outp]) 
+    if crop:
+        cmd = ' '.join([cmd]+crop_pts[1:-1].split(','))  
     os.system(cmd)     
 
 if __name__ == "__main__":    
@@ -56,14 +60,17 @@ if __name__ == "__main__":
                     help='Output location; Overrides location in cali.config', default = None)
     parser.add_argument('--input', '-i', type=str,
                     help='Base folder to search for raw videos for excel sheet input; Overrides location in cali.config', default = None)
-
+    parser.add_argument('--crop', action="store_true",
+                    help='crop video')
+    parser.add_argument('--remote', action="store_true",
+                    help='copy output to remote location')
     
     job = parser.parse_args().name[0]
-    
     input_loc = parser.parse_args().input 
     output_loc = parser.parse_args().output
-
-    
+    remote = parser.parse_args().remote
+    crop = parser.parse_args().crop
+        
     print('Using python binary at '+py_inscopix)
     
     job_type = get_job_type(job)
@@ -75,7 +82,11 @@ if __name__ == "__main__":
         print('Using input from: ',(input_loc)) 
         
         if output_loc==None:
-            output_loc=os.path.expanduser(c['ROOTS']['preprocessed'])
+            if remote:
+                output_loc=os.path.join(os.path.expanduser(c['ROOTS']['root_remote']),'preprocessed')
+            else:
+                output_loc=os.path.join(os.path.expanduser(c['ROOTS']['root']),'preprocessed')
+
         print('Writing output to: ',(output_loc))        
         
         sheet = pandas.read_excel(job)
@@ -96,13 +107,30 @@ if __name__ == "__main__":
                     time = str(int(row[4]))
                     rest = 'trial' if row[6] else 'rest'
                     name = '_'.join([mouse,date,time,rest])+'.tif'
-                    outp=os.path.join(output_loc,mouse,date,name)
-                    os.makedirs(os.path.join(output_loc,mouse,date),exist_ok=True)
-                    decode_file(inp,outp)
-                            
+                    print(mouse,date,time,rest)
+                    if crop:
+                        if mouse in c['CROPS'].keys():
+                            crop_pts = c['CROPS'][mouse]
+                            print('cropping at '+crop_pts)
+                        else:
+                            print ("No cropping points defined for "+mouse+' in cali.config : (')
+                    
+                    if remote:
+                        interp = os.path.join(os.path.abspath('./tmp.tif'))
+                        print('Writing temp file to '+interp)
+                        decode_file(inp,interp,crop_pts)
+                        outp = os.path.join(output_loc,mouse,date,name)
+                        os.system("ssh "+c['ROOTS']['address_remote']+" 'mkdir -p "+os.path.join(output_loc,mouse,date)+ "/'") 
+                        os.system("scp "+interp+" "+c['ROOTS']['address_remote']+":"+outp)
+                        os.system("rm "+interp)
+                    else:
+                        outp=os.path.join(output_loc,mouse,date,name)
+                        os.makedirs(os.path.join(output_loc,mouse,date),exist_ok=True)
+                        decode_file(inp,outp,crop_pts)
+                                
             except:
                 fails.append(name_elements)
-            break
+            
         
         if fails:
             print('The following files were not found: ',fails)

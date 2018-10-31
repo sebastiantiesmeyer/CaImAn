@@ -39,7 +39,7 @@ def extract_spikes(file, destination,bord_px=0):
     K = None            # upper bound on number of components per patch, in general None
     gSig = 3            # gaussian width of a 2D gaussian kernel, which approximates a neuron
     gSiz = 13           # average diameter of a neuron, in general 4*gSig+1
-    merge_thresh = .7   # merging threshold, max correlation allowed
+    merge_thresh = .5   # merging threshold, max correlation allowed
     rf = 40             # half-size of the patches in pixels. e.g., if rf=40, patches are 80x80
     stride_cnmf = 20    # amount of overlap between the patches in pixels
     #                     (keep it at least large as gSiz, i.e 4 times the neuron size gSig)
@@ -58,8 +58,8 @@ def extract_spikes(file, destination,bord_px=0):
     #                         gnb= 0: Don't return background
     nb_patch = 10       # number of background components (rank) per patch,
     #                     use 0 or -1 for exact background of ring model (cf. gnb)
-    min_corr = .8       # min peak value from correlation image
-    min_pnr = 10        # min peak to noise ration from PNR image
+    min_corr = .6       # min peak value from correlation image
+    min_pnr = 6        # min peak to noise ration from PNR image
     ssub_B = 2          # additional downsampling factor in space for background
     ring_size_factor = None #1.4  # radius of ring is gSiz*ring_size_factor    
     
