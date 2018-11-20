@@ -165,7 +165,7 @@ if __name__ == "__main__":
             else:
                 destination = os.path.join(root,'motion_corr','_'.join(job[0].split('_')[:2]))
             print(job)
-            if not (any([(job[0] in f) for f in os.listdir(os.path.join(root,'preprocessed'))])) or parser.parse_args().overwrite:    
+            if not (any([(job[0][:-4] in f) for f in os.listdir(os.path.join(root,'motion_corr'))])) or parser.parse_args().overwrite:    
                 motion_correct([os.path.join(root,'preprocessed',j) for j in job],destination=destination,non_rigid = parser.parse_args().non_rigid)
     else:
         motion_correct(input,parser.parse_args().output,non_rigid = parser.parse_args().non_rigid)
